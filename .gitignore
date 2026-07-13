@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+next-env.d.ts.timestamp
+
+# production
+/build
+
+# env / secrets
+.env
+.env.local
+.env*.local
+
+# agent-core local artifacts (dev CLI writes these)
+agent-core/stock_ledger.json
+agent-core/stock_ledger.txt
+agent-core/all_stocks_*.txt
+agent-core/sell_monitor_*.txt
+agent-core/credentials.json
+agent-core/token.json
+
+# logs
+*.log
+npm-debug.log*
+
+# misc
+.DS_Store
+*.pem
+/coverage
+.vscode/
+.idea/
+
+# typescript
+*.tsbuildinfo
