@@ -37,7 +37,7 @@ export const env = {
     return opt("STRIPE_WEBHOOK_SECRET");
   },
   get RESEARCH_RUN_PRICE_CENTS() {
-    return num("RESEARCH_RUN_PRICE_CENTS", 2500);
+    return num("RESEARCH_RUN_PRICE_CENTS", 2000);
   },
   get JOB_COST_CEILING_USD() {
     return num("JOB_COST_CEILING_USD", 15);

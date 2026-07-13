@@ -22,7 +22,7 @@ async function main() {
   await client.query(
     `INSERT INTO purchases(user_id, type, price_cents, status, stripe_checkout_session_id)
      VALUES ($1, 'research_run', $2, 'paid', $3)`,
-    [rows[0].id, Number(process.env.RESEARCH_RUN_PRICE_CENTS || 2500), `grant_${Date.now()}`]
+    [rows[0].id, Number(process.env.RESEARCH_RUN_PRICE_CENTS || 2000), `grant_${Date.now()}`]
   );
   console.log(`Granted 1 research-run credit to ${email}.`);
 }

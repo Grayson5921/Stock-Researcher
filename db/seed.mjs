@@ -36,7 +36,7 @@ async function main() {
     await client.query(
       `INSERT INTO purchases(user_id, type, price_cents, status, stripe_checkout_session_id)
        VALUES ($1, 'research_run', $2, 'paid', $3)`,
-      [userId, Number(process.env.RESEARCH_RUN_PRICE_CENTS || 2500), `seed_${Date.now()}`]
+      [userId, Number(process.env.RESEARCH_RUN_PRICE_CENTS || 2000), `seed_${Date.now()}`]
     );
   }
 

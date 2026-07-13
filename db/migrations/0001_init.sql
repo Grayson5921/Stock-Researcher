@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS purchases (
   user_id                     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type                        TEXT NOT NULL DEFAULT 'research_run',
   scope                       JSONB,          -- {field} | {ticker}
-  price_cents                 INTEGER NOT NULL DEFAULT 2500,
+  price_cents                 INTEGER NOT NULL DEFAULT 2000,
   status                      TEXT NOT NULL DEFAULT 'pending'
                                 CHECK (status IN ('pending','paid','consumed','refunded')),
   stripe_checkout_session_id  TEXT UNIQUE,    -- idempotency handle for the webhook
