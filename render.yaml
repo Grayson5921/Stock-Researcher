@@ -19,7 +19,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: ninecritics-redis
           property: connectionString
       - key: SESSION_SECRET
@@ -60,7 +60,7 @@ services:
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: ninecritics-redis
           property: connectionString
       - key: ANTHROPIC_API_KEY
@@ -74,7 +74,7 @@ services:
       - key: SEC_USER_AGENT
         value: "nine-critics contact@ninecritics.example"
 
-  - type: redis
+  - type: keyvalue # Render's managed Redis-compatible store (formerly "redis")
     name: ninecritics-redis
     plan: starter
     maxmemoryPolicy: noeviction # BullMQ requires noeviction
