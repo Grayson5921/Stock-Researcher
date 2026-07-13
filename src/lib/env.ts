@@ -26,7 +26,9 @@ export const env = {
     return req("SESSION_SECRET");
   },
   get APP_URL() {
-    return opt("APP_URL", "http://localhost:3000");
+    // Render injects RENDER_EXTERNAL_URL with the service's public URL, so the
+    // blueprint deploy works before a custom domain is configured.
+    return opt("APP_URL", opt("RENDER_EXTERNAL_URL", "http://localhost:3000"));
   },
   get STRIPE_SECRET_KEY() {
     return opt("STRIPE_SECRET_KEY");
