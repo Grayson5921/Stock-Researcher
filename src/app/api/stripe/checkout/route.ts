@@ -30,7 +30,7 @@ export async function POST() {
             currency: "usd",
             unit_amount: env.RESEARCH_RUN_PRICE_CENTS,
             product_data: {
-              name: "Stock Researcher — Research Run",
+              name: "Nine Critics — Research Run",
               description: "One deep research run: one sector scan or one ticker deep-dive.",
             },
           },

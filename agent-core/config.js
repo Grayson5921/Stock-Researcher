@@ -166,7 +166,7 @@ export const config = {
   // "text"  -> writes a plain .txt transcript of ALL stocks (opens in Notepad)
   // "gdoc"  -> also writes a Google Doc (still writes the .txt too)
   DEFAULT_OUTPUT: "text",
-  GOOGLE_DOC_TITLE: "AI Agent Stock Research - All Evaluated Stocks",
+  GOOGLE_DOC_TITLE: "Nine Critics — Stock Research Report (All Evaluated Stocks)",
   GOOGLE_CREDENTIALS_FILE: "credentials.json", // OAuth client secrets (for gdoc)
   GOOGLE_TOKEN_FILE: "token.json", // cached OAuth token
 

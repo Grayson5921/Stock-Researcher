@@ -6,9 +6,10 @@ import { DISCLAIMER_SHORT } from "@/lib/pricing";
 import LogoutButton from "@/components/LogoutButton";
 
 export const metadata: Metadata = {
-  title: "Stock Researcher — automated multi-agent research",
+  title: "Nine Critics — nine critics, one verdict",
   description:
-    "An automated multi-agent stock research tool. Not investment advice.",
+    "Nine skeptical AI critics stress-test low/mid-cap stock ideas with live research, debate, and simulations. Automated research — not investment advice.",
+  icons: { icon: "/favicon.svg" },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +19,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <header className="header">
           <div className="container">
-            <Link href="/" className="brand">📈 Stock Researcher</Link>
+            <Link href="/" className="brand" style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/mark.svg" alt="" width={22} height={22} />
+              Nine Critics
+            </Link>
             <nav>
               {user ? (
                 <>

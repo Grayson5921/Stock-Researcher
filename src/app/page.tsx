@@ -12,12 +12,13 @@ export default async function Home() {
     <div className="stack">
       <section className="card" style={{ padding: 32 }}>
         <h1 style={{ margin: 0, fontSize: 34, letterSpacing: -0.5 }}>
-          A skeptical panel of AI analysts, hunting low/mid-cap stocks.
+          Nine critics. One verdict.
         </h1>
         <p className="muted" style={{ fontSize: 17, maxWidth: 680 }}>
-          Candidates are proposed with live research, stress-tested through a 9-critic gauntlet
-          with debate, checked against news and bull/bear simulations, and delivered as a ranked
-          report — or a documented “nothing passed.”
+          Stock ideas that survive scrutiny — and the full argument for why. Candidates are
+          proposed with live research, stress-tested by nine skeptical AI critics with debate,
+          checked against news and bull/bear simulations, and delivered as a ranked report — or a
+          documented “nothing passed.”
         </p>
         <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
           <Link className="btn" href={user ? "/dashboard" : "/signup"}>
