@@ -191,9 +191,13 @@ export const config = {
 // applyProfile(config, name). Values not listed here keep their defaults above.
 // ---------------------------------------------------------------------------
 export const PROFILES = {
-  // Paid one-time research runs. Tuned for a hard COGS cap per sale.
+  // Paid one-time research runs. The COGS cap per sale is the COST ceiling
+  // (COST_CEILING_USD), not a round counter: the search keeps hunting fresh
+  // candidates until something passes, ideas run out, or the run's budget is
+  // nearly spent — a paying customer gets the maximum search their money buys.
   commercial_run: {
-    MAX_SEARCH_ROUNDS: 5, // hard COGS cap per sale
+    MAX_SEARCH_ROUNDS: 40, // generous; the cost ceiling is the real stop
+    MAX_EMPTY_ROUNDS: 3,
     STOCKS_PER_FIELD: 3,
     RESEARCH_MODEL: "claude-opus-4-8",
     RESEARCH_EFFORT: "high",

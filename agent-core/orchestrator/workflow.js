@@ -10,6 +10,18 @@ import {
 import { fetchGroundTruth } from "../marketData.js";
 import { PreScreenAgent, VerifierAgent } from "../agents/gatekeeperAgents.js";
 import { emit } from "../progress.js";
+import { costTracker, CostCeilingError } from "../costTracker.js";
+
+// Soft budget stop: don't START another candidate/round when the run's spend is
+// within this margin of the hard ceiling. Keeps the run from being killed
+// mid-evaluation by CostCeilingError — it wraps up and reports instead.
+const SOFT_STOP_MARGIN_USD = 2.5;
+
+function budgetExhausted() {
+  const ceiling = config.COST_CEILING_USD;
+  if (!ceiling || !config.ENABLE_COST_TRACKER) return false;
+  return costTracker.total() >= ceiling - SOFT_STOP_MARGIN_USD;
+}
 
 // Route the workflow's existing log() calls through the progress sink so the UI
 // can stream the debate live (and the CLI still prints when VERBOSE).
@@ -301,24 +313,42 @@ export class Workflow {
     let emptyStreak = 0;
 
     while (approved.length < target && round < maxRounds) {
+      // The customer's budget, not the round counter, is the real limit: keep
+      // hunting while money remains; stop gracefully when it's nearly spent.
+      if (budgetExhausted()) {
+        const spent = costTracker.total().toFixed(2);
+        log(`[${agent.name}] Run budget nearly used ($${spent}); stopping with ${allReviews.length} candidate(s) evaluated.`);
+        emit("phase", `Search budget for this run is nearly used — wrapping up with ${allReviews.length} candidate(s) fully evaluated.`);
+        break;
+      }
       round += 1;
       const batchSize = round === 1 ? config.STOCKS_PER_FIELD : config.MAX_NEW_RESEARCH_AT_ONCE;
       log(`\n[${agent.name}] Search round ${round}/${maxRounds}: researching ${batchSize} candidate(s)...`);
 
-      let batch = await agent.findStocks(batchSize, seen);
-      batch = batch.filter((s) => !seen.includes(s.ticker) && !evaluatedThisRun.has(s.ticker));
-      seen.push(...batch.map((s) => s.ticker));
+      let batch;
+      try {
+        batch = await agent.findStocks(batchSize, seen);
+        batch = batch.filter((s) => !seen.includes(s.ticker) && !evaluatedThisRun.has(s.ticker));
+        seen.push(...batch.map((s) => s.ticker));
 
-      // Re-open previously-denied stocks to argue them again (bounded).
-      if (config.ENABLE_REVISIT) {
-        const candidates = deniedForField(ledger, agent.fieldKey)
-          .filter((e) => !evaluatedThisRun.has(e.ticker))
-          .slice(0, config.REVISITS_PER_ROUND);
-        for (const e of candidates) {
-          log(`[${agent.name}] Re-opening previously-denied ${e.ticker} to re-argue (attempt ${(e.revisits || 0) + 1}).`);
-          const revisit = await agent.reResearch(e, priorInteractionSummary(e));
-          if (revisit) batch.push(revisit);
+        // Re-open previously-denied stocks to argue them again (bounded).
+        if (config.ENABLE_REVISIT) {
+          const candidates = deniedForField(ledger, agent.fieldKey)
+            .filter((e) => !evaluatedThisRun.has(e.ticker))
+            .slice(0, config.REVISITS_PER_ROUND);
+          for (const e of candidates) {
+            log(`[${agent.name}] Re-opening previously-denied ${e.ticker} to re-argue (attempt ${(e.revisits || 0) + 1}).`);
+            const revisit = await agent.reResearch(e, priorInteractionSummary(e));
+            if (revisit) batch.push(revisit);
+          }
         }
+      } catch (e) {
+        if (e instanceof CostCeilingError || e?.name === "CostCeilingError") {
+          log(`[${agent.name}] Cost ceiling reached while researching; delivering results so far.`);
+          emit("phase", "Run budget fully used during research — delivering everything evaluated so far.");
+          break;
+        }
+        throw e;
       }
 
       if (batch.length === 0) {
@@ -334,8 +364,24 @@ export class Workflow {
       log(`[${agent.name}] Candidates: ${batch.map(shortName).join(", ")}`);
 
       for (const stock of batch) {
+        if (budgetExhausted()) {
+          log(`[${agent.name}] Run budget nearly used; skipping remaining candidates in this batch.`);
+          break;
+        }
         evaluatedThisRun.add(stock.ticker);
-        const review = await this._evaluateStock(agent, stock);
+        let review;
+        try {
+          review = await this._evaluateStock(agent, stock);
+        } catch (e) {
+          // Hard ceiling tripped mid-evaluation: keep everything evaluated so
+          // far and deliver the report — a paid run must never end empty-handed.
+          if (e instanceof CostCeilingError || e?.name === "CostCeilingError") {
+            log(`[${agent.name}] Cost ceiling reached mid-evaluation of ${stock.ticker}; delivering results so far.`);
+            emit("phase", `Run budget fully used during ${stock.ticker} — delivering everything evaluated so far.`);
+            return allReviews;
+          }
+          throw e;
+        }
         emit("stock-result", `${stock.ticker}: ${review.finalStatus}${review.rejectReason ? " — " + review.rejectReason : ""}`, {
           ticker: stock.ticker,
           status: review.finalStatus,
@@ -376,12 +422,22 @@ export class Workflow {
       const priorSummary = prior ? priorInteractionSummary(prior) : "";
       if (prior) log(`\n[${agent.name}] ${ticker} is in the ledger (${prior.status}); prior history attached.`);
       log(`[${agent.name}] Researching user-requested ${ticker}...`);
-      const stock = await agent.researchTicker(ticker, priorSummary);
-      if (!stock) {
-        log(`[${agent.name}] Could not verify ${ticker} as a real listed ticker — skipping.`);
-        continue;
+      let stock, review;
+      try {
+        stock = await agent.researchTicker(ticker, priorSummary);
+        if (!stock) {
+          log(`[${agent.name}] Could not verify ${ticker} as a real listed ticker — skipping.`);
+          continue;
+        }
+        review = await this._evaluateStock(agent, stock);
+      } catch (e) {
+        if (e instanceof CostCeilingError || e?.name === "CostCeilingError") {
+          log(`[${agent.name}] Cost ceiling reached during ${ticker}; delivering results so far.`);
+          emit("phase", `Run budget fully used during ${ticker} — delivering everything evaluated so far.`);
+          break;
+        }
+        throw e;
       }
-      const review = await this._evaluateStock(agent, stock);
       reviews.push(review);
       emit("stock-result", `${ticker}: ${review.finalStatus}${review.rejectReason ? " — " + review.rejectReason : ""}`, {
         ticker,
