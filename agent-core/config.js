@@ -201,6 +201,10 @@ export const PROFILES = {
     EFFORT: "medium",
     REQUIRED_APPROVALS: 8, // 8 of 9
     SIMULATION_GATE_THRESHOLD: 55,
+    // Portfolio-fit OFF for paid runs: judging picks against a user's own
+    // holdings is personalized advice (adviser-registration risk), and the
+    // web product doesn't collect customer holdings anyway.
+    ENABLE_PORTFOLIO_FIT: false,
     ENFORCE_MARKET_CAP: true, // hard $300M-$20B gate ON
     MARKET_CAP_MIN: 300e6,
     MARKET_CAP_MAX: 20e9,
