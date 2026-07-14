@@ -61,7 +61,7 @@ async function processRun(job: Job<RunJobData>) {
   }
 
   try {
-    const { reportText, usage, approvedCount } = await runResearchJob({
+    const { reportText, reportData, usage, approvedCount } = await runResearchJob({
       pool,
       userId,
       scope,
@@ -74,8 +74,8 @@ async function processRun(job: Job<RunJobData>) {
 
     await persistUsage(userId, jobId, usage);
     await pool.query(
-      `INSERT INTO reports(user_id, job_id, kind, body_text) VALUES ($1, $2, 'run', $3)`,
-      [userId, jobId, reportText]
+      `INSERT INTO reports(user_id, job_id, kind, body_text, body_json) VALUES ($1, $2, 'run', $3, $4)`,
+      [userId, jobId, reportText, reportData ? JSON.stringify(reportData) : null]
     );
     await pool.query(
       `UPDATE jobs SET status='done', cost_usd=$2, finished_at=now() WHERE id=$1`,

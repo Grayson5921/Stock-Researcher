@@ -34,15 +34,29 @@ export function buildReport(results) {
   const approved = all.filter((x) => x.r.finalStatus === "APPROVED");
   const rejected = all.filter((x) => x.r.finalStatus !== "APPROVED");
 
-  // Rank approved by simulation upside confidence (no sim -> sorts last).
+  // Rank approved by simulation upside confidence (no sim -> sorts last), and
+  // rejected by how close they came (critic approvals) so near-misses lead.
   const score = (x) => (x.r.simulation ? x.r.simulation.netUpside : -1);
   approved.sort((a, b) => score(b) - score(a));
+  rejected.sort((a, b) => (b.r.approvals ?? 0) - (a.r.approvals ?? 0));
 
   lines.push(
     `SUMMARY: ${approved.length} approved, ${rejected.length} not approved, ` +
       `across ${Object.keys(results).length} field(s).`
   );
-  lines.push("Approved companies are ranked below by simulation upside confidence (highest first).");
+  if (approved.length === 0 && rejected.length > 0) {
+    lines.push("");
+    lines.push(
+      `RESULT: none of the ${rejected.length} candidates cleared every gate this run. ` +
+        "That is the finding — the gauntlet is strict by design (8 of 9 critics, " +
+        "non-negative news, simulation confidence), and a documented \"nothing passed\" " +
+        "protects you from marginal ideas. Below is the full evaluation of every " +
+        "candidate, ranked by how close it came, including exactly which critics " +
+        "denied it and why — the near-misses at the top are the ones to watch."
+    );
+  } else {
+    lines.push("Approved companies are ranked below by simulation upside confidence (highest first).");
+  }
   lines.push("=".repeat(72));
   lines.push("");
 
@@ -73,10 +87,10 @@ export function buildReport(results) {
     renderStockDetail(lines, x.field, x.r, true);
   }
 
-  // Every rejected stock, with reasons.
+  // Every rejected stock, with reasons, ranked by how close it came.
   lines.push("");
   lines.push("=".repeat(72));
-  lines.push("NOT APPROVED — FULL DETAIL");
+  lines.push("NOT APPROVED — FULL DETAIL (ranked by how close each came to passing)");
   if (rejected.length === 0) lines.push("  (none)");
   for (const x of rejected) {
     lines.push("");

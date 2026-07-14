@@ -123,6 +123,35 @@ input[type="text"], input[type="email"], input[type="password"] {
 @media (prefers-color-scheme: dark) {
   .msg-row.left .bubble { background: #2c2c2e; }
 }
+
+/* --- Styled report ------------------------------------------------------- */
+.report-summary { display: flex; gap: 12px; margin: 14px 0; flex-wrap: wrap; }
+.sum-tile {
+  flex: 1 1 140px; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px; text-align: center;
+}
+.sum-n { font-size: 28px; font-weight: 800; line-height: 1.1; }
+.sum-l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stock-card {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 12px;
+}
+.stock-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.stock-head .rank { color: var(--muted); font-weight: 700; margin-right: 8px; }
+.stock-head .tkr { font-weight: 800; font-size: 16px; }
+.stock-stats { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.stock-stats .stat strong { color: var(--text); }
+.stock-stats .pos { color: var(--green); }
+.stock-stats .neg { color: var(--red); }
+.reject-reason {
+  margin: 10px 0 0; font-size: 13.5px; padding: 8px 12px; border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
+}
+.small-btn { padding: 4px 0; font-size: 13px; margin-top: 8px; }
+.stock-detail { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px; }
+.stock-detail ul { margin: 6px 0 12px; padding-left: 18px; }
+.verdict-list li { margin-bottom: 6px; list-style: none; margin-left: -18px; }
 .report { white-space: pre-wrap; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }

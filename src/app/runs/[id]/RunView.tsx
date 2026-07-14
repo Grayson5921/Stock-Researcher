@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import ReportView, { type ReportData } from "./ReportView";
 
 interface ProgressEvent {
   type: string;
@@ -115,6 +116,7 @@ function Message({ e }: { e: ProgressEvent }) {
 export default function RunView({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<JobState | null>(null);
   const [report, setReport] = useState<string | null>(null);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const stopped = useRef(false);
 
@@ -127,6 +129,7 @@ export default function RunView({ jobId }: { jobId: string }) {
           const data = await res.json();
           setJob(data.job);
           if (data.report) setReport(data.report);
+          if (data.reportData) setReportData(data.reportData);
           if (TERMINAL.has(data.job.status)) {
             stopped.current = true;
             return;
@@ -163,7 +166,7 @@ export default function RunView({ jobId }: { jobId: string }) {
 
       {job?.scope && (
         <p className="muted small" style={{ margin: 0 }}>
-          Scope: {job.scope.ticker ? `ticker ${job.scope.ticker}` : `${job.scope.field} sector`} ·
+          Scope: {job.scope.ticker ? `ticker ${job.scope.ticker}` : job.scope.custom ? `"${job.scope.custom}"` : `${job.scope.field} sector`} ·
           {" "}Estimated cost so far: <span className="mono">${Number(job.cost_usd).toFixed(2)}</span>
         </p>
       )}
@@ -190,12 +193,20 @@ export default function RunView({ jobId }: { jobId: string }) {
         </div>
       </section>
 
-      {report && (
+      {reportData ? (
+        <ReportView data={reportData} jobId={jobId} />
+      ) : report ? (
         <section className="card">
-          <h2 style={{ marginTop: 0 }}>Report</h2>
-          <div className="report">{report}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 style={{ margin: 0 }}>Report</h2>
+            <a className="btn secondary" style={{ marginLeft: "auto", padding: "6px 12px" }}
+               href={`/api/runs/${jobId}/report`}>
+              Download (.txt)
+            </a>
+          </div>
+          <div className="report" style={{ marginTop: 12 }}>{report}</div>
         </section>
-      )}
+      ) : null}
     </div>
   );
 }

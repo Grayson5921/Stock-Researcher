@@ -28,19 +28,24 @@ import { setProgressSink, clearProgressSink, emit } from "./progress.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Enforce exactly one scope: { field } OR { ticker }. Returns a normalized scope.
+// Enforce exactly one scope: { field } OR { ticker } OR { custom } (a free-text
+// research focus, e.g. "healthcare AI companies"). Returns a normalized scope.
 export function normalizeScope(scope) {
   const field = scope?.field ? String(scope.field).toLowerCase() : null;
   const ticker = scope?.ticker ? String(scope.ticker).toUpperCase() : null;
-  if (field && ticker) throw new Error("Scope must be a single field OR a single ticker, not both.");
-  if (!field && !ticker) throw new Error("Scope must specify a field or a ticker.");
+  const custom = scope?.custom ? String(scope.custom).replace(/\s+/g, " ").trim() : null;
+  const set = [field, ticker, custom].filter(Boolean).length;
+  if (set !== 1) throw new Error("Scope must be exactly one of: a sector field, a ticker, or a custom focus.");
   if (field && !(field in config.FIELDS)) {
     throw new Error(`Unknown field '${field}'. Known: ${Object.keys(config.FIELDS).join(", ")}`);
   }
   if (ticker && !/^[A-Z]{1,5}(\.[A-Z])?$/.test(ticker)) {
     throw new Error(`Invalid ticker '${ticker}'.`);
   }
-  return { field, ticker };
+  if (custom && !/^[\w\s.,&()'+\/:-]{8,120}$/.test(custom)) {
+    throw new Error("Custom focus must be 8-120 characters of plain text.");
+  }
+  return { field, ticker, custom };
 }
 
 /**
@@ -52,10 +57,10 @@ export function normalizeScope(scope) {
  * @param {string} [opts.profile]           config profile name (default commercial_run)
  * @param {(evt:object)=>void} opts.onEvent progress-event sink
  * @param {string} [opts.apiKey]            Anthropic key (defaults to env)
- * @returns {Promise<{reportText:string, usage:{rows:Array<object>, totalUsd:number, calls:number, searches:number}, approvedCount:number}>}
+ * @returns {Promise<{reportText:string, reportData:object, usage:{rows:Array<object>, totalUsd:number, calls:number, searches:number}, approvedCount:number}>}
  */
 export async function runResearchJob({ pool, userId, scope, profile = "commercial_run", onEvent, apiKey }) {
-  const { field, ticker } = normalizeScope(scope);
+  const { field, ticker, custom } = normalizeScope(scope);
 
   // 1) Apply the commercial profile and reset per-job accounting.
   applyProfile(profile);
@@ -68,7 +73,7 @@ export async function runResearchJob({ pool, userId, scope, profile = "commercia
 
   try {
     if (process.env.MOCK_WORKFLOW === "1") {
-      return await runMock({ field, ticker });
+      return await runMock({ field, ticker, custom });
     }
 
     const key = apiKey || process.env.ANTHROPIC_API_KEY;
@@ -101,21 +106,24 @@ export async function runResearchJob({ pool, userId, scope, profile = "commercia
       const reviews = await workflow.runTickers([ticker], agent);
       results = { "user-request": reviews };
     } else {
-      emit("phase", `Scanning the ${field} sector for viable low/mid-cap stocks.`);
-      const agent = new ResearchAgent(client, config.RESEARCH_MODEL, field, config.FIELDS[field], config.RESEARCH_EFFORT);
+      // Known sector or user-supplied custom focus — same gauntlet either way.
+      const fieldKey = field || custom.toLowerCase();
+      const fieldDesc = field ? config.FIELDS[field] : custom;
+      emit("phase", field
+        ? `Scanning the ${field} sector for viable low/mid-cap stocks.`
+        : `Scanning for viable low/mid-cap stocks: "${custom}".`);
+      const agent = new ResearchAgent(client, config.RESEARCH_MODEL, fieldKey, fieldDesc, config.RESEARCH_EFFORT);
       const workflow = new Workflow([agent], critics, simulators, newsAgent, portfolioAgent, ledger);
       const reviews = await workflow.runField(agent);
-      results = { [field]: reviews };
+      results = { [fieldKey]: reviews };
     }
 
     await flushLedger();
 
     const reportText = buildReport(results);
-    const approvedCount = Object.values(results)
-      .flat()
-      .filter((r) => r.finalStatus === "APPROVED").length;
-    emit("done", `Run complete: ${approvedCount} viable stock(s).`, { approvedCount });
-    return { reportText, usage: costTracker.snapshot(), approvedCount };
+    const reportData = serializeResults(results);
+    emit("done", `Run complete: ${reportData.approvedCount} viable stock(s).`, { approvedCount: reportData.approvedCount });
+    return { reportText, reportData, usage: costTracker.snapshot(), approvedCount: reportData.approvedCount };
   } finally {
     clearProgressSink();
     clearLedgerContext();
@@ -123,12 +131,73 @@ export async function runResearchJob({ pool, userId, scope, profile = "commercia
 }
 
 // ---------------------------------------------------------------------------
+// Structured report payload for the web UI. Approved stocks first (ranked by
+// simulation confidence), then the rest ranked by how close they came
+// (approvals count) — so a "nothing passed" report still leads with substance.
+// ---------------------------------------------------------------------------
+export function serializeResults(results) {
+  const stocks = [];
+  for (const [fieldKey, reviews] of Object.entries(results)) {
+    for (const r of reviews) {
+      const lv = latestVerdictsOf(r);
+      stocks.push({
+        field: fieldKey,
+        ticker: r.stock.ticker,
+        company: r.stock.company,
+        thesis: r.stock.thesis || "",
+        catalysts: r.stock.catalysts || [],
+        sources: (r.stock.articles || []).map((a) => ({ title: a.title, url: a.url })),
+        status: r.finalStatus,
+        rejectReason: r.rejectReason || "",
+        approvals: r.approvals ?? lv.filter((v) => v.approved).length,
+        totalCritics: lv.length,
+        verdicts: lv.map((v) => ({ critic: v.criticName, approved: v.approved, reasoning: v.reasoning })),
+        debate: (r.debateLog || []).map((t) => ({ critic: t.criticName, action: t.action, argument: t.argument })),
+        news: r.news
+          ? { label: r.news.label, score: r.news.sentimentScore, summary: r.news.summary || "" }
+          : null,
+        simulation: r.simulation
+          ? {
+              netUpside: r.simulation.netUpside,
+              expectedReturn: r.simulation.expectedReturn ?? null,
+              riskReward: r.simulation.riskReward ?? null,
+              upside: r.simulation.upside ?? null,
+              downside: r.simulation.downside ?? null,
+            }
+          : null,
+      });
+    }
+  }
+  const approved = stocks.filter((s) => s.status === "APPROVED");
+  const rest = stocks.filter((s) => s.status !== "APPROVED");
+  approved.sort((a, b) => (b.simulation?.netUpside ?? -1) - (a.simulation?.netUpside ?? -1));
+  rest.sort((a, b) => (b.approvals ?? 0) - (a.approvals ?? 0));
+  return {
+    approvedCount: approved.length,
+    evaluatedCount: stocks.length,
+    fields: Object.keys(results),
+    stocks: [...approved, ...rest],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+// Most recent verdict per critic (same logic as agents/models.js latestVerdicts).
+function latestVerdictsOf(review) {
+  const latest = new Map();
+  for (const v of review.verdicts || []) {
+    const cur = latest.get(v.criticName);
+    if (!cur || v.round >= cur.round) latest.set(v.criticName, v);
+  }
+  return [...latest.values()];
+}
+
+// ---------------------------------------------------------------------------
 // Mock mode: a canned but realistic stream + report, no API spend. Lets the full
 // sign-up -> pay -> run -> report path be demoed/tested with MOCK_WORKFLOW=1.
 // ---------------------------------------------------------------------------
-async function runMock({ field, ticker }) {
+async function runMock({ field, ticker, custom }) {
   const t = ticker || "NVEE";
-  const label = ticker ? `ticker ${t}` : `the ${field} sector`;
+  const label = ticker ? `ticker ${t}` : custom ? `"${custom}"` : `the ${field} sector`;
   emit("phase", `[MOCK] Starting research run on ${label}.`);
   await sleep(150);
   emit("log", `[MOCK] Researcher proposing candidates for ${label}...`);
@@ -170,14 +239,15 @@ async function runMock({ field, ticker }) {
   emit("stock-result", `${t}: APPROVED`, { ticker: t, status: "APPROVED", reason: "" });
   await sleep(80);
 
-  const results = mockResults(field, ticker, t);
+  const results = mockResults(field, ticker, t, custom);
   const reportText = buildReport(results);
+  const reportData = serializeResults(results);
   emit("done", "[MOCK] Run complete: 1 viable stock.", { approvedCount: 1 });
-  return { reportText, usage: costTracker.snapshot(), approvedCount: 1 };
+  return { reportText, reportData, usage: costTracker.snapshot(), approvedCount: 1 };
 }
 
-function mockResults(field, ticker, t) {
-  const fieldKey = ticker ? "user-request" : field;
+function mockResults(field, ticker, t, custom) {
+  const fieldKey = ticker ? "user-request" : custom ? custom.toLowerCase() : field;
   const verdicts = Object.keys(CRITICS).map((critic) => ({
     criticName: critic,
     approved: critic !== "The Valuation Disciplinarian",

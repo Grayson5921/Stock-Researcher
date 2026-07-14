@@ -10,6 +10,7 @@ function scopeLabel(scope: any) {
   if (!scope) return "—";
   if (scope.ticker) return `Ticker · ${scope.ticker}`;
   if (scope.field) return `Sector · ${scope.field}`;
+  if (scope.custom) return `Custom · ${scope.custom}`;
   return "—";
 }
 

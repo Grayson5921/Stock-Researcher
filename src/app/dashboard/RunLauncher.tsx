@@ -15,9 +15,10 @@ export default function RunLauncher({
   enableDevCredits: boolean;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<"field" | "ticker">("field");
+  const [mode, setMode] = useState<"field" | "ticker" | "custom">("field");
   const [field, setField] = useState<(typeof FIELDS)[number]>("technology");
   const [ticker, setTicker] = useState("");
+  const [custom, setCustom] = useState("");
   const [pack, setPack] = useState<(typeof PACKS)[number]>(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -60,7 +61,12 @@ export default function RunLauncher({
     setErr(null);
     setBusy(true);
     try {
-      const scope = mode === "field" ? { field } : { ticker: ticker.trim().toUpperCase() };
+      const scope =
+        mode === "field"
+          ? { field }
+          : mode === "ticker"
+            ? { ticker: ticker.trim().toUpperCase() }
+            : { custom: custom.trim() };
       const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -98,11 +104,15 @@ export default function RunLauncher({
               <input type="radio" checked={mode === "ticker"} onChange={() => setMode("ticker")} />
               Single ticker deep-dive
             </label>
+            <label>
+              <input type="radio" checked={mode === "custom"} onChange={() => setMode("custom")} />
+              Custom focus
+            </label>
           </div>
 
-          {mode === "field" ? (
+          {mode === "field" && (
             <>
-              <label>Sector</label>
+              <label>Sector <span className="muted small">(recommended)</span></label>
               <div className="radio-row">
                 {FIELDS.map((f) => (
                   <label key={f}>
@@ -112,7 +122,8 @@ export default function RunLauncher({
                 ))}
               </div>
             </>
-          ) : (
+          )}
+          {mode === "ticker" && (
             <>
               <label htmlFor="ticker">Ticker</label>
               <input
@@ -123,6 +134,24 @@ export default function RunLauncher({
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 style={{ maxWidth: 220 }}
               />
+            </>
+          )}
+          {mode === "custom" && (
+            <>
+              <label htmlFor="custom">Your research focus</label>
+              <input
+                id="custom"
+                type="text"
+                placeholder='e.g. "healthcare AI companies" or "defense suppliers"'
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                maxLength={120}
+                style={{ maxWidth: 460 }}
+              />
+              <p className="muted small" style={{ margin: "6px 0 0" }}>
+                8–120 characters. The panel still hunts low/mid-cap ($300M–$20B) stocks within your
+                focus and applies the same nine-critic gauntlet.
+              </p>
             </>
           )}
         </>
@@ -145,7 +174,11 @@ export default function RunLauncher({
           <button
             className="btn"
             onClick={startRun}
-            disabled={busy || (mode === "ticker" && ticker.trim().length === 0)}
+            disabled={
+              busy ||
+              (mode === "ticker" && ticker.trim().length === 0) ||
+              (mode === "custom" && custom.trim().length < 8)
+            }
           >
             {busy ? "Working…" : "Run Research"}
           </button>
@@ -160,8 +193,10 @@ export default function RunLauncher({
         )}
       </div>
       <p className="disclaimer" style={{ marginTop: 16 }}>
-        Each run picks ONE scope: a sector scan OR one ticker. Runs take several minutes and dozens of
-        model calls. Output is automated research, not investment advice.
+        Each run picks ONE scope: a sector scan, one ticker, or your own custom focus. Runs take
+        several minutes and dozens of model calls. Every run delivers a full written report — including
+        when nothing passes the gauntlet, which documents every candidate and why. Output is automated
+        research, not investment advice.
       </p>
     </section>
   );

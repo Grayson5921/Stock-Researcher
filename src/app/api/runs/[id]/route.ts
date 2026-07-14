@@ -15,14 +15,16 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     if (!jobRow) return error("Run not found.", 404);
 
     let report: string | null = null;
+    let reportData: unknown = null;
     if (jobRow.status === "done") {
-      const r = await one<{ body_text: string }>(
-        "SELECT body_text FROM reports WHERE job_id = $1 ORDER BY created_at DESC LIMIT 1",
+      const r = await one<{ body_text: string; body_json: unknown }>(
+        "SELECT body_text, body_json FROM reports WHERE job_id = $1 ORDER BY created_at DESC LIMIT 1",
         [params.id]
       );
       report = r?.body_text ?? null;
+      reportData = r?.body_json ?? null;
     }
-    return json({ job: jobRow, report });
+    return json({ job: jobRow, report, reportData });
   } catch (e) {
     return handleError(e);
   }
