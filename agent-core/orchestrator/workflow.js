@@ -75,7 +75,14 @@ export class Workflow {
   async _evaluateStock(agent, stock) {
     const review = makeReview(stock);
     log(`\n   >>> Evaluating ${shortName(stock)}`);
-    emit("stock", `Evaluating ${shortName(stock)}`, { ticker: stock.ticker, company: stock.company });
+    // The researcher "speaks" its proposal so the UI shows a chat turn, not a log line.
+    emit("proposal", `Proposing ${shortName(stock)}`, {
+      ticker: stock.ticker,
+      company: stock.company,
+      thesis: stock.thesis || "",
+      catalysts: (stock.catalysts || []).slice(0, 4),
+      revisit: !!stock.revisitOf,
+    });
 
     // 0a. Ground truth: fetch real market/SEC data and attach it so every
     // downstream agent reasons from data, not model recall.
@@ -94,6 +101,9 @@ export class Workflow {
               review.finalStatus = "REJECTED";
               review.rejectReason = `Market cap ${b(gt.marketCap)} outside the ${b(config.MARKET_CAP_MIN)}-${b(config.MARKET_CAP_MAX)} low/mid-cap mandate.`;
               log(`   <<< ${shortName(stock)}: REJECTED — ${review.rejectReason}`);
+              emit("gate", review.rejectReason, {
+                gate: "Market-Cap Gate", ticker: stock.ticker, pass: false, reason: review.rejectReason,
+              });
               return review;
             }
           }
@@ -111,8 +121,13 @@ export class Workflow {
         review.finalStatus = "REJECTED";
         review.rejectReason = `Pre-screen: ${ps.reason}`;
         log(`   <<< ${shortName(stock)}: REJECTED at pre-screen — ${ps.reason}`);
+        emit("gate", ps.reason, { gate: "Pre-Screen Gatekeeper", ticker: stock.ticker, pass: false, reason: ps.reason });
         return review;
       }
+      emit("gate", "No obvious disqualifiers — sending it to the panel.", {
+        gate: "Pre-Screen Gatekeeper", ticker: stock.ticker, pass: true,
+        reason: ps.reason || "No obvious disqualifiers — sending it to the panel.",
+      });
     }
 
     // 0c. Claim verifier: fact-check load-bearing catalysts before the panel.
@@ -123,9 +138,14 @@ export class Workflow {
         review.finalStatus = "REJECTED";
         review.rejectReason = `Claim verification failed: ${vf.reason}`;
         log(`   <<< ${shortName(stock)}: REJECTED by verifier — ${vf.reason}`);
+        emit("gate", vf.reason, { gate: "Claim Verifier", ticker: stock.ticker, pass: false, reason: vf.reason });
         return review;
       }
       log(`      Claims verified: ${vf.reason || "ok"}`);
+      emit("gate", vf.reason || "Load-bearing claims check out.", {
+        gate: "Claim Verifier", ticker: stock.ticker, pass: true,
+        reason: vf.reason || "Load-bearing claims check out.",
+      });
     }
 
     review.verdicts.push(...(await this._critique(stock, 1)));
@@ -324,6 +344,7 @@ export class Workflow {
       round += 1;
       const batchSize = round === 1 ? config.STOCKS_PER_FIELD : config.MAX_NEW_RESEARCH_AT_ONCE;
       log(`\n[${agent.name}] Search round ${round}/${maxRounds}: researching ${batchSize} candidate(s)...`);
+      emit("phase", `Search round ${round} — hunting ${batchSize} fresh candidate(s)…`);
 
       let batch;
       try {
@@ -354,8 +375,10 @@ export class Workflow {
       if (batch.length === 0) {
         emptyStreak += 1;
         log(`[${agent.name}] No new candidates this round (${emptyStreak}/${config.MAX_EMPTY_ROUNDS}).`);
+        emit("phase", `No new candidates this round (${emptyStreak}/${config.MAX_EMPTY_ROUNDS}).`);
         if (emptyStreak >= config.MAX_EMPTY_ROUNDS) {
           log(`[${agent.name}] Out of fresh ideas for this field; stopping search.`);
+          emit("phase", "The researcher is out of fresh ideas for this scope — wrapping up.");
           break;
         }
         continue;
@@ -394,6 +417,7 @@ export class Workflow {
         if (review.finalStatus === "APPROVED") {
           approved.push(review);
           log(`\n[${agent.name}] ✓ Viable stock found: ${shortName(stock)} (${approved.length}/${target}).`);
+          emit("phase", `✓ Viable stock found: ${shortName(stock)}.`);
           if (approved.length >= target) break;
         }
       }

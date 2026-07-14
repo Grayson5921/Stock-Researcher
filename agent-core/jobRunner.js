@@ -200,9 +200,24 @@ async function runMock({ field, ticker, custom }) {
   const label = ticker ? `ticker ${t}` : custom ? `"${custom}"` : `the ${field} sector`;
   emit("phase", `[MOCK] Starting research run on ${label}.`);
   await sleep(150);
-  emit("log", `[MOCK] Researcher proposing candidates for ${label}...`);
+  emit("phase", "[MOCK] Search round 1 — hunting fresh candidates…");
   await sleep(150);
-  emit("stock", `[MOCK] Evaluating ${t}`, { ticker: t });
+  emit("proposal", `[MOCK] Proposing ${t}`, {
+    ticker: t,
+    company: `${t} Holdings (mock)`,
+    thesis: "Illustrative mock thesis: durable niche leader at a reasonable multiple.",
+    catalysts: ["Backlog growth", "Accretive tuck-in M&A"],
+    revisit: false,
+  });
+  await sleep(120);
+  emit("gate", "No obvious disqualifiers — sending it to the panel.", {
+    gate: "Pre-Screen Gatekeeper", ticker: t, pass: true, reason: "No obvious disqualifiers — sending it to the panel.",
+  });
+  await sleep(100);
+  emit("gate", "Load-bearing claims check out.", {
+    gate: "Claim Verifier", ticker: t, pass: true, reason: "Load-bearing claims check out.",
+  });
+  await sleep(100);
 
   const critics = Object.keys(CRITICS);
   for (const c of critics) {

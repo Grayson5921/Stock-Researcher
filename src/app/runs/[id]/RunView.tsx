@@ -31,6 +31,32 @@ function critic(name: string) {
 function Message({ e }: { e: ProgressEvent }) {
   const d = e.data || {};
   switch (e.type) {
+    case "proposal":
+      return (
+        <div className="msg-row right">
+          <span className="msg-sender">Researcher</span>
+          <div className="bubble">
+            <span className="verdict-chip">{d.revisit ? "RE-ARGUES" : "PROPOSES"}</span>
+            {"\n"}
+            <strong>{d.ticker}</strong> — {d.company}
+            {d.thesis ? `\n${d.thesis}` : ""}
+            {d.catalysts?.length ? `\nCatalysts: ${d.catalysts.join("; ")}` : ""}
+          </div>
+        </div>
+      );
+    case "gate":
+      return (
+        <div className="msg-row left">
+          <span className="msg-sender">{d.gate || "Gatekeeper"}</span>
+          <div className="bubble">
+            <span className={`verdict-chip ${d.pass ? "approve" : "deny"}`}>
+              {d.pass ? "PASS" : "DENY"}
+            </span>
+            {"\n"}
+            {d.reason || e.message}
+          </div>
+        </div>
+      );
     case "verdict":
       return (
         <div className="msg-row left">
@@ -104,12 +130,11 @@ function Message({ e }: { e: ProgressEvent }) {
           {e.message}
         </div>
       );
-    default: {
-      // Raw log lines: keep only the readable ones as faint system lines.
-      const text = (e.message || "").trim();
-      if (!text || text.startsWith("=") || text.startsWith("-")) return null;
-      return <div className="chat-system">{text.replace(/\s+/g, " ").slice(0, 220)}</div>;
-    }
+    default:
+      // Raw log lines are console/CLI noise — every meaningful moment has a
+      // structured event (proposal/gate/verdict/debate/news/sim/result/phase),
+      // so the chat shows only real turns.
+      return null;
   }
 }
 
@@ -147,14 +172,17 @@ export default function RunView({ jobId }: { jobId: string }) {
     };
   }, [jobId]);
 
+  const VISIBLE = new Set([
+    "proposal", "gate", "verdict", "debate", "news", "sim", "stock", "stock-result", "phase", "done", "error",
+  ]);
+  const events = (job?.progress_events ?? []).filter((e) => VISIBLE.has(e.type));
+  const status = job?.status ?? "queued";
+  const live = !TERMINAL.has(status);
+
   // Autoscroll as new messages land.
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
-  }, [job?.progress_events?.length]);
-
-  const events = job?.progress_events ?? [];
-  const status = job?.status ?? "queued";
-  const live = !TERMINAL.has(status);
+  }, [events.length]);
 
   return (
     <div className="stack">
