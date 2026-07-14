@@ -19,10 +19,103 @@ interface JobState {
 
 const TERMINAL = new Set(["done", "failed"]);
 
+// Short display name: "The Valuation Disciplinarian" -> "Valuation Disciplinarian"
+function critic(name: string) {
+  return name?.replace(/^The\s+/i, "") ?? "Critic";
+}
+
+// One event -> one chat element. Critics speak from the left (gray bubbles),
+// the researcher from the right (blue), everything procedural is a centered
+// system line — like a group chat you're reading.
+function Message({ e }: { e: ProgressEvent }) {
+  const d = e.data || {};
+  switch (e.type) {
+    case "verdict":
+      return (
+        <div className="msg-row left">
+          <span className="msg-sender">{critic(d.critic)}{d.round > 1 ? " · re-review" : ""}</span>
+          <div className="bubble">
+            <span className={`verdict-chip ${d.approved ? "approve" : "deny"}`}>
+              {d.approved ? "APPROVE" : "DENY"}
+            </span>
+            {"\n"}
+            {d.reasoning}
+          </div>
+        </div>
+      );
+    case "debate":
+      return (
+        <div className="msg-row right">
+          <span className="msg-sender">Researcher → {critic(d.critic)}</span>
+          <div className="bubble">
+            {d.action === "concede" ? (
+              <>
+                <span className="verdict-chip">CONCEDES</span>
+                {"\n"}
+                {d.argument || "Point taken — withdrawing this claim."}
+              </>
+            ) : (
+              <>
+                <span className="verdict-chip">REBUTS</span>
+                {"\n"}
+                {d.argument}
+              </>
+            )}
+          </div>
+        </div>
+      );
+    case "news":
+      return (
+        <div className="msg-row left">
+          <span className="msg-sender">News &amp; Sentiment</span>
+          <div className="bubble">
+            <span className={`verdict-chip ${d.label === "negative" ? "deny" : "approve"}`}>
+              {(d.label || "n/a").toUpperCase()}{d.score != null ? ` · ${d.score}` : ""}
+            </span>
+            {d.summary ? "\n" + d.summary : null}
+          </div>
+        </div>
+      );
+    case "sim":
+      return (
+        <div className="msg-row left">
+          <span className="msg-sender">Bull &amp; Bear Simulators</span>
+          <div className="bubble">{e.message.replace(/^\[MOCK\]\s*/, "")}</div>
+        </div>
+      );
+    case "stock":
+      return <div className="chat-system strong">— {e.message.replace(/^\[MOCK\]\s*/, "").trim()} —</div>;
+    case "stock-result": {
+      const approved = d.status === "APPROVED";
+      return (
+        <div className="chat-system strong" style={{ color: approved ? "var(--green)" : "var(--red)" }}>
+          {d.ticker}: {approved ? "✓ APPROVED" : "✕ NOT APPROVED"}
+          {d.reason ? ` — ${d.reason}` : ""}
+        </div>
+      );
+    }
+    case "phase":
+    case "done":
+      return <div className="chat-system">{e.message.replace(/^\[MOCK\]\s*/, "")}</div>;
+    case "error":
+      return (
+        <div className="chat-system strong" style={{ color: "var(--red)" }}>
+          {e.message}
+        </div>
+      );
+    default: {
+      // Raw log lines: keep only the readable ones as faint system lines.
+      const text = (e.message || "").trim();
+      if (!text || text.startsWith("=") || text.startsWith("-")) return null;
+      return <div className="chat-system">{text.replace(/\s+/g, " ").slice(0, 220)}</div>;
+    }
+  }
+}
+
 export default function RunView({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<JobState | null>(null);
   const [report, setReport] = useState<string | null>(null);
-  const feedRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
   const stopped = useRef(false);
 
   useEffect(() => {
@@ -51,13 +144,14 @@ export default function RunView({ jobId }: { jobId: string }) {
     };
   }, [jobId]);
 
-  // Autoscroll the feed as events arrive.
+  // Autoscroll as new messages land.
   useEffect(() => {
-    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [job?.progress_events?.length]);
 
   const events = job?.progress_events ?? [];
   const status = job?.status ?? "queued";
+  const live = !TERMINAL.has(status);
 
   return (
     <div className="stack">
@@ -83,26 +177,16 @@ export default function RunView({ jobId }: { jobId: string }) {
       )}
 
       <section className="card">
-        <h2 style={{ marginTop: 0 }}>Live progress {!TERMINAL.has(status) && <span className="muted small">(streaming…)</span>}</h2>
-        <div className="feed" ref={feedRef}>
+        <h2 style={{ marginTop: 0 }}>
+          The debate {live && <span className="muted small">(live — the panel is arguing…)</span>}
+        </h2>
+        <div className="chat" ref={chatRef}>
           {events.length === 0 ? (
-            <p className="muted small" style={{ margin: 0 }}>Waiting for the run to start…</p>
+            <div className="chat-system">Waiting for the run to start… this page updates on its own.</div>
           ) : (
-            events.map((e, i) => (
-              <div key={i} className={`evt ${e.type}`}>
-                {e.type === "verdict" && e.data ? (
-                  <>
-                    <span className={`badge ${e.data.approved ? "approve" : "deny"}`}>
-                      {e.data.approved ? "APPROVE" : "DENY"}
-                    </span>{" "}
-                    <strong>{e.data.critic}</strong> — {e.data.reasoning}
-                  </>
-                ) : (
-                  <span className="mono">{e.message}</span>
-                )}
-              </div>
-            ))
+            events.map((e, i) => <Message key={i} e={e} />)
           )}
+          {live && events.length > 0 && <div className="chat-system">…</div>}
         </div>
       </section>
 

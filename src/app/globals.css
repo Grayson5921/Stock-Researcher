@@ -86,10 +86,43 @@ input[type="text"], input[type="email"], input[type="password"] {
 .badge.deny, .badge.failed, .badge.DENY { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
 .badge.running, .badge.queued { background: color-mix(in srgb, var(--amber) 20%, transparent); color: var(--amber); }
 
-.feed { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; max-height: 460px; overflow: auto; }
-.feed .evt { padding: 3px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
-.feed .evt:last-child { border-bottom: 0; }
-.evt.verdict { font-weight: 600; }
+/* --- Debate chat (Messages-style) --------------------------------------- */
+.chat {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 14px; max-height: 520px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.msg-row { display: flex; flex-direction: column; max-width: 78%; margin-top: 10px; }
+.msg-row.left { align-self: flex-start; align-items: flex-start; }
+.msg-row.right { align-self: flex-end; align-items: flex-end; }
+.msg-sender { font-size: 11.5px; color: var(--muted); margin: 0 10px 3px; font-weight: 600; }
+.bubble {
+  padding: 8px 13px; border-radius: 18px; font-size: 14px; line-height: 1.42;
+  word-break: break-word; white-space: pre-wrap;
+}
+.msg-row.left .bubble {
+  background: var(--bubble-gray, #e9e9eb); color: var(--text);
+  border-bottom-left-radius: 5px;
+}
+.msg-row.right .bubble {
+  background: var(--brand); color: #fff;
+  border-bottom-right-radius: 5px;
+}
+.bubble .verdict-chip {
+  display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: 0.4px;
+  padding: 1px 8px; border-radius: 999px; margin-bottom: 4px;
+}
+.verdict-chip.approve { background: color-mix(in srgb, var(--green) 20%, transparent); color: var(--green); }
+.verdict-chip.deny { background: color-mix(in srgb, var(--red) 20%, transparent); color: var(--red); }
+.msg-row.right .verdict-chip { background: rgba(255,255,255,0.25); color: #fff; }
+.chat-system {
+  align-self: center; text-align: center; color: var(--muted);
+  font-size: 12px; margin-top: 14px; max-width: 90%;
+}
+.chat-system.strong { font-weight: 700; color: var(--text); }
+@media (prefers-color-scheme: dark) {
+  .msg-row.left .bubble { background: #2c2c2e; }
+}
 .report { white-space: pre-wrap; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 14px; }

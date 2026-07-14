@@ -147,10 +147,28 @@ async function runMock({ field, ticker }) {
     });
     await sleep(60);
   }
-  emit("news", "[MOCK] News sentiment: +0.4 (positive).", { label: "positive" });
+  emit("debate", "[MOCK] Researcher rebuts The Valuation Disciplinarian.", {
+    ticker: t,
+    actor: "researcher",
+    action: "rebut",
+    critic: "The Valuation Disciplinarian",
+    argument: "Forward multiple is below peers once the new backlog converts; valuation concern is priced in (mock rebuttal).",
+  });
+  await sleep(80);
+  emit("verdict", "The Valuation Disciplinarian: DENY", {
+    ticker: t,
+    critic: "The Valuation Disciplinarian",
+    approved: false,
+    reasoning: "Rebuttal noted, but margin of safety still thin at this price (mock hold).",
+    round: 2,
+  });
+  await sleep(80);
+  emit("news", "[MOCK] News sentiment: +0.4 (positive).", { label: "positive", score: 0.4, summary: "Mostly favorable mock coverage." });
   await sleep(120);
-  emit("sim", "[MOCK] Net upside confidence 63% | expected +18% | R/R 2.1:1.", { netUpside: 63 });
+  emit("sim", "[MOCK] Net upside confidence 63% | expected +18% | R/R 2.1:1.", { netUpside: 63, expectedReturn: 18, riskReward: 2.1, passed: true });
   await sleep(120);
+  emit("stock-result", `${t}: APPROVED`, { ticker: t, status: "APPROVED", reason: "" });
+  await sleep(80);
 
   const results = mockResults(field, ticker, t);
   const reportText = buildReport(results);

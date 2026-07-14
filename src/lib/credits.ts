@@ -13,20 +13,22 @@ export async function countPaidCredits(userId: string): Promise<number> {
   return row ? Number(row.n) : 0;
 }
 
-// Create the pending purchase that a Stripe Checkout session will later confirm.
-export async function createPendingPurchase(
+// Create the pending purchases a Stripe Checkout session will later confirm —
+// one row per credit, all sharing the session id (packs of 1/3/5/10).
+export async function createPendingPurchases(
   userId: string,
   sessionId: string,
   scope: unknown,
-  priceCents: number
-): Promise<string> {
-  const row = await one<{ id: string }>(
-    `INSERT INTO purchases(user_id, type, scope, price_cents, status, stripe_checkout_session_id)
-     VALUES ($1, 'research_run', $2, $3, 'pending', $4)
-     RETURNING id`,
-    [userId, scope == null ? null : JSON.stringify(scope), priceCents, sessionId]
-  );
-  return row!.id;
+  priceCents: number,
+  quantity = 1
+): Promise<void> {
+  for (let i = 0; i < quantity; i++) {
+    await query(
+      `INSERT INTO purchases(user_id, type, scope, price_cents, status, stripe_checkout_session_id)
+       VALUES ($1, 'research_run', $2, $3, 'pending', $4)`,
+      [userId, scope == null ? null : JSON.stringify(scope), priceCents, sessionId]
+    );
+  }
 }
 
 // Idempotently mark the purchase for a checkout session as paid. Safe to call

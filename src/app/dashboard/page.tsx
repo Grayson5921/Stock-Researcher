@@ -33,7 +33,11 @@ export default async function Dashboard() {
         <span className="muted small">{user.email}</span>
       </div>
 
-      <RunLauncher credits={credits} enableDevCredits={!env.isProd && env.ENABLE_DEV_CREDITS} />
+      <RunLauncher
+        credits={credits}
+        priceCents={env.RESEARCH_RUN_PRICE_CENTS}
+        enableDevCredits={!env.isProd && env.ENABLE_DEV_CREDITS}
+      />
 
       <section className="card">
         <h2 style={{ marginTop: 0 }}>Your research runs</h2>

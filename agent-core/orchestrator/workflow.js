@@ -63,6 +63,7 @@ export class Workflow {
   async _evaluateStock(agent, stock) {
     const review = makeReview(stock);
     log(`\n   >>> Evaluating ${shortName(stock)}`);
+    emit("stock", `Evaluating ${shortName(stock)}`, { ticker: stock.ticker, company: stock.company });
 
     // 0a. Ground truth: fetch real market/SEC data and attach it so every
     // downstream agent reasons from data, not model recall.
@@ -164,11 +165,32 @@ export class Workflow {
         if (!critic) continue;
         if (turn.action === "concede") {
           log(`         ${agent.name} CONCEDES to ${turn.criticName}.`);
+          emit("debate", `${agent.name} concedes to ${turn.criticName}.`, {
+            ticker: stock.ticker,
+            actor: "researcher",
+            action: "concede",
+            critic: turn.criticName,
+            argument: turn.argument || "",
+          });
           continue; // concession stands; verdict stays a denial
         }
         log(`         ${agent.name} REBUTS ${turn.criticName}: ${turn.argument.slice(0, 140)}`);
+        emit("debate", `${agent.name} rebuts ${turn.criticName}.`, {
+          ticker: stock.ticker,
+          actor: "researcher",
+          action: "rebut",
+          critic: turn.criticName,
+          argument: turn.argument,
+        });
         const newV = await critic.reReview(stock, turn.argument, turn.newEvidence, debateRound + 1);
         log(`            -> ${critic.name} now: [${newV.approved ? "APPROVE" : "HOLD DENY"}] ${newV.reasoning}`);
+        emit("verdict", `${critic.name}: ${newV.approved ? "APPROVE" : "DENY"}`, {
+          ticker: stock.ticker,
+          critic: critic.name,
+          approved: newV.approved,
+          reasoning: newV.reasoning,
+          round: debateRound + 1,
+        });
         review.verdicts.push(newV);
       }
 
@@ -198,6 +220,12 @@ export class Workflow {
       log(`   ~~~ ${shortName(stock)} cleared critics; gathering recent news...`);
       review.news = await this.newsAgent.analyze(stock);
       log(`      News sentiment: ${review.news.sentimentScore} (${review.news.label}) — ${review.news.summary}`);
+      emit("news", `News sentiment: ${review.news.label} (${review.news.sentimentScore})`, {
+        ticker: stock.ticker,
+        label: review.news.label,
+        score: review.news.sentimentScore,
+        summary: review.news.summary,
+      });
       newsContext = NewsAgent.toContext(review.news);
 
       // News gate: drop stocks fighting net-negative recent news.
@@ -229,6 +257,13 @@ export class Workflow {
       review.simulation = { bull, bear, netUpside, expectedReturn, upside, downside, riskReward, passed };
       log(`      Net upside confidence ${netUpside}% | expected ${expectedReturn}% | R/R ${riskReward ?? "n/a"}` +
           (threshold == null ? " (ranking)" : ` (gate >= ${threshold}% -> ${passed ? "PASS" : "FAIL"})`));
+      emit("sim", `Simulation: ${netUpside}% upside confidence, expected ${expectedReturn}%${riskReward != null ? `, R/R ${riskReward}:1` : ""}`, {
+        ticker: stock.ticker,
+        netUpside,
+        expectedReturn,
+        riskReward,
+        passed,
+      });
 
       if (!passed) {
         review.finalStatus = "REJECTED";
@@ -301,6 +336,11 @@ export class Workflow {
       for (const stock of batch) {
         evaluatedThisRun.add(stock.ticker);
         const review = await this._evaluateStock(agent, stock);
+        emit("stock-result", `${stock.ticker}: ${review.finalStatus}${review.rejectReason ? " — " + review.rejectReason : ""}`, {
+          ticker: stock.ticker,
+          status: review.finalStatus,
+          reason: review.rejectReason || "",
+        });
         allReviews.push(review);
         // Persist to the ledger immediately so a crash mid-run is not lost.
         recordReview(ledger, agent.fieldKey, review);
@@ -343,6 +383,11 @@ export class Workflow {
       }
       const review = await this._evaluateStock(agent, stock);
       reviews.push(review);
+      emit("stock-result", `${ticker}: ${review.finalStatus}${review.rejectReason ? " — " + review.rejectReason : ""}`, {
+        ticker,
+        status: review.finalStatus,
+        reason: review.rejectReason || "",
+      });
       recordReview(ledger, agent.fieldKey, review);
       saveLedger(ledger);
       log(`\n[${agent.name}] ${ticker}: ${review.finalStatus}${review.rejectReason ? " — " + review.rejectReason : ""}`);

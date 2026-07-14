@@ -39,12 +39,26 @@ async function persistUsage(userId: string, jobId: string, usage: any) {
 async function processRun(job: Job<RunJobData>) {
   const { jobId, userId, scope, profile, purchaseId } = job.data;
 
-  // Fresh start for this attempt.
-  await pool.query(
-    `UPDATE jobs SET status='running', started_at=now(), progress_events='[]'::jsonb, cost_usd=0, error=NULL
-      WHERE id=$1`,
-    [jobId]
-  );
+  // Mark running. Only the FIRST attempt starts with a clean event log — a
+  // retry must preserve the chat the user already watched, and instead appends
+  // a marker so the feed shows what happened.
+  if (job.attemptsMade === 0) {
+    await pool.query(
+      `UPDATE jobs SET status='running', started_at=now(), progress_events='[]'::jsonb, cost_usd=0, error=NULL
+        WHERE id=$1`,
+      [jobId]
+    );
+  } else {
+    await pool.query(
+      `UPDATE jobs SET status='running', error=NULL WHERE id=$1`,
+      [jobId]
+    );
+    await appendEvent(jobId, {
+      type: "phase",
+      message: "The run hit a snag and restarted — picking up with a fresh attempt.",
+      at: new Date().toISOString(),
+    });
+  }
 
   try {
     const { reportText, usage, approvedCount } = await runResearchJob({
